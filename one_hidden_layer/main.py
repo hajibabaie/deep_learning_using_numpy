@@ -192,7 +192,7 @@ def main():
     n_2 = y_train.shape[0]
 
     # max iterations and learning rate
-    max_iteration = 5000
+    max_iteration = 10000
     learning_rate = 0.001
 
     # initialize parameters
