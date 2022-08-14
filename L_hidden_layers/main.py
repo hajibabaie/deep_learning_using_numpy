@@ -33,7 +33,7 @@ def initialize_parameters(dims):
 
     for i in range(1, len(dims)):
 
-        out["W" + str(i)] = np.random.randn(dims[i], dims[i - 1]) * 0.01
+        out["W" + str(i)] = np.random.randn(dims[i], dims[i - 1]) * np.sqrt(2 / (dims[i - 1]))
         out["b" + str(i)] = np.zeros((dims[i], 1))
 
     return out
@@ -145,8 +145,8 @@ def main():
     x_test = unroll(x_test)
 
     # number of units per each layer
-    layer_dims = [x_train.shape[0], 10, y_train.shape[0]]
-    max_iteration = 10000
+    layer_dims = [x_train.shape[0], 20, y_train.shape[0]]
+    max_iteration = 2500
     learning_rate = 0.0075
 
     # initialize parameters
