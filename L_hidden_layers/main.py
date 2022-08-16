@@ -1,196 +1,195 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import h5py
-import copy
 import os
 
-
-def load_dataset():
-
-    dataset_train = h5py.File("./data/train_catvnoncat.h5", "r")
-    train_x_orig = np.array(dataset_train["train_set_x"])
-    train_x_orig = train_x_orig / 255.
-    train_y_orig = np.array(dataset_train["train_set_y"])
-    train_y_orig = np.reshape(train_y_orig, (1, len(train_y_orig)))
-
-    dataset_test = h5py.File("./data/test_catvnoncat.h5", "r")
-    test_x_orig = np.array(dataset_test["test_set_x"])
-    test_x_orig = test_x_orig / 255.
-    test_y_orig = np.array(dataset_test["test_set_y"])
-    test_y_orig = np.reshape(test_y_orig, (1, len(test_y_orig)))
-
-    return train_x_orig, train_y_orig, test_x_orig, test_y_orig
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import numpy as np
+import h5py
 
 
-def unroll(x):
+def load_data():
 
-    return np.reshape(x, (x.shape[0], -1)).T
+    train_dataset = h5py.File("./datasets/train_signs.h5", "r")
+    x_train = tf.data.Dataset.from_tensor_slices(train_dataset["train_set_x"])
+    y_train = tf.data.Dataset.from_tensor_slices(train_dataset["train_set_y"])
 
+    test_dataset = h5py.File("./datasets/test_signs.h5", "r")
+    x_test = tf.data.Dataset.from_tensor_slices(test_dataset["test_set_x"])
+    y_test = tf.data.Dataset.from_tensor_slices(test_dataset["test_set_y"])
 
-def initialize_parameters(dims):
-
-    out = {}
-
-    for i in range(1, len(dims)):
-
-        out["W" + str(i)] = np.random.randn(dims[i], dims[i - 1]) * np.sqrt(2 / (dims[i - 1]))
-        out["b" + str(i)] = np.zeros((dims[i], 1))
-
-    return out
+    return x_train, y_train, x_test, y_test
 
 
-def sigmoid(z):
+def normalize(image):
 
-    return np.divide(1, 1 + np.exp(-z))
-
-
-def relu(z):
-
-    return np.maximum(z, 0)
+    image = tf.cast(image, tf.float32) / 255.
+    image = tf.reshape(image, (-1,))
+    return image
 
 
-def forward_propagation(x, params):
+def one_hot_matrix(label):
 
-    caches = {"A0": x}
-    for i in range(1, len(params) // 2):
-
-        caches["Z" + str(i)] = np.dot(params["W" + str(i)], caches["A" + str(i - 1)]) + params["b" + str(i)]
-        caches["A" + str(i)] = sigmoid(caches["Z" + str(i)])
-
-    caches["Z" + str(i + 1)] = np.dot(params["W" + str(i + 1)], caches["A" + str(i)]) + params["b" + str(i + 1)]
-    AL = sigmoid(caches["Z" + str(i + 1)])
-
-    return AL, caches
+    one_hot = tf.one_hot(label, depth=6, axis=0)
+    one_hot = tf.reshape(one_hot, (-1,))
+    return one_hot
 
 
-def compute_cost(A, Y):
+def initialize_parameters():
 
-    m = Y.shape[1]
+    initializer = tf.keras.initializers.GlorotNormal()
 
-    cost = np.squeeze((-1 / m) * np.sum(np.multiply(Y, np.log(A)) + np.multiply(1 - Y, np.log(1 - A))))
+    W1 = tf.Variable(initializer(shape=(25, 12288)))
+    b1 = tf.Variable(initializer(shape=(25, 1)))
+    W2 = tf.Variable(initializer(shape=(12, 25)))
+    b2 = tf.Variable(initializer(shape=(12, 1)))
+    W3 = tf.Variable(initializer(shape=(6, 12)))
+    b3 = tf.Variable(initializer(shape=(6, 1)))
 
-    return cost
+    parameters = {
+        "W1": W1,
+        "b1": b1,
+        "W2": W2,
+        "b2": b2,
+        "W3": W3,
+        "b3": b3
+    }
+    return parameters
 
 
-def prediction(A):
+def forward_propagation(X, parameters):
 
-    y_pred = np.zeros_like(A)
+    W1 = parameters["W1"]
+    b1 = parameters["b1"]
+    W2 = parameters["W2"]
+    b2 = parameters["b2"]
+    W3 = parameters["W3"]
+    b3 = parameters["b3"]
 
-    y_pred[0, :] = A[0, : ] >= 0.5
+    z1 = tf.add(tf.matmul(W1, X), b1)
+    a1 = tf.keras.activations.relu(z1)
 
-    return y_pred
+    z2 = tf.add(tf.matmul(W2, a1), b2)
+    a2 = tf.keras.activations.relu(z2)
+
+    z3 = tf.add(tf.matmul(W3, a2), b3)
+
+    return z3
 
 
-def accuracy(y_hat, y):
+def compute_cost(labels, logits):
 
-    return sum(y_hat[0, :] == y[0, :]) / y.shape[1]
+    return tf.reduce_mean(tf.keras.losses.categorical_crossentropy(tf.transpose(labels), tf.transpose(logits), from_logits=True))
 
 
 def plot(train, test, name):
 
     os.makedirs("./figures", exist_ok=True)
-
+    train = np.squeeze(train)
+    test = np.squeeze(test)
     plt.figure(dpi=300, figsize=(10, 6))
     plt.plot(range(len(train)), train, label="training set")
     plt.plot(range(len(test)), test, label="test set")
-    plt.xlabel("Number of Iteration")
-    plt.ylabel(f"{name}")
     plt.legend()
+    plt.xlabel("Number of Epochs")
+    plt.ylabel(f"{name}")
     plt.savefig(f"./figures/{name}.png")
 
 
-def backward_propagation(AL, Y, parameters, caches, learning_rate):
-    m = AL.shape[1]
-    number_of_layers = len(caches) // 2
-    grads = {}
-    grads["dA" + str(number_of_layers)] = np.divide(-Y, AL) + np.divide(1 - Y, 1 - AL)
-    for i in reversed(range(1, number_of_layers + 1)):
-
-        if i == number_of_layers:
-
-            grads["dZ" + str(i)] = copy.deepcopy(grads["dA" + str(i)] * AL * (1 - AL))
-
-        else:
-
-            grads["dZ" + str(i)] = grads["dA" + str(i)] * caches["A" + str(i)] * (1 - caches["A" + str(i)])
-
-        grads["dW" + str(i)] = (1 / m) * np.dot(grads["dZ" + str(i)], caches["A" + str(i - 1)].T)
-        grads["db" + str(i)] = (1 / m) * np.sum(grads["dZ" + str(i)], axis=1, keepdims=True)
-        grads["dA" + str(i - 1)] = np.dot(parameters["W" + str(i)].T, grads["dZ" + str(i)])
-
-    return grads
+def plot_cost(train):
 
 
-def update_parameters(grads, parameters, learning_rate):
-
-    for i in range(1, len(parameters) // 2 + 1):
-        parameters["W" + str(i)] = parameters["W" + str(i)] - learning_rate * grads["dW" + str(i)]
-        parameters["b" + str(i)] = parameters["b" + str(i)] - learning_rate * grads["db" + str(i)]
-
-    return parameters
+    os.makedirs("./figures", exist_ok=True)
+    train = np.squeeze(train)
+    plt.figure(dpi=300, figsize=(10, 6))
+    plt.plot(range(len(train)), train)
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Best Cost")
+    plt.savefig(f"./figures/cost_function.png")
 
 
 def main():
 
-    train_costs = []
-    test_costs = []
-    train_accuracy = []
-    test_accuracy = []
+    costs = []
+    train_acc = []
+    test_acc = []
 
-    # load dataset
-    x_train, y_train, x_test, y_test = load_dataset()
+    x_train, y_train, x_test, y_test = load_data()
 
-    # unroll dataset
-    x_train = unroll(x_train)
-    x_test = unroll(x_test)
+    x_train = x_train.map(normalize)
+    x_test = x_test.map(normalize)
 
-    # number of units per each layer
-    layer_dims = [x_train.shape[0], 20, y_train.shape[0]]
-    max_iteration = 2500
-    learning_rate = 0.0075
+    y_train = y_train.map(one_hot_matrix)
+    y_test = y_test.map(one_hot_matrix)
 
-    # initialize parameters
-    parameters = initialize_parameters(layer_dims)
+    parameters = initialize_parameters()
 
-    for iter_main in range(max_iteration):
+    W1 = parameters["W1"]
+    b1 = parameters["b1"]
+    W2 = parameters["W2"]
+    b2 = parameters["b2"]
+    W3 = parameters["W3"]
+    b3 = parameters["b3"]
 
-        AL_train, caches = forward_propagation(x_train, parameters)
+    number_of_epochs = 200
 
-        train_cost = compute_cost(AL_train, y_train)
+    train_accuracy = tf.keras.metrics.CategoricalAccuracy()
+    test_accuracy = tf.keras.metrics.CategoricalAccuracy()
 
-        train_costs.append(train_cost)
+    minibatch_size = 32
 
-        y_pred_train = prediction(AL_train)
+    train_data = tf.data.Dataset.zip((x_train, y_train))
+    test_data = tf.data.Dataset.zip((x_test, y_test))
 
-        train_acc = accuracy(y_pred_train, y_train)
+    train_minibatches = train_data.batch(minibatch_size)
+    test_minibatches = test_data.batch(minibatch_size)
 
-        train_accuracy.append(train_acc)
+    trainable_variables = [W1, b1, W2, b2, W3, b3]
 
-        AL_test, _ = forward_propagation(x_test, parameters)
+    optimizers = tf.keras.optimizers.Adam(0.0001)
+    m = train_data.cardinality().numpy()
+    for epoch in range(number_of_epochs):
 
-        test_cost = compute_cost(AL_test, y_test)
+        train_accuracy.reset_states()
+        test_accuracy.reset_states()
+        epoch_cost = 0
 
-        test_costs.append(test_cost)
+        for (minibatch_x, minibatch_y) in train_minibatches:
 
-        y_pred_test = prediction(AL_test)
+            with tf.GradientTape() as tape:
 
-        test_acc = accuracy(y_pred_test, y_test)
+                logits = forward_propagation(tf.transpose(minibatch_x), parameters)
 
-        test_accuracy.append(test_acc)
+                cost = compute_cost(tf.transpose(minibatch_y), logits)
 
-        grads = backward_propagation(AL_train, y_train, parameters, caches, learning_rate)
+            grads = tape.gradient(cost, trainable_variables)
 
-        parameters = update_parameters(grads, parameters, learning_rate)
+            optimizers.apply_gradients(zip(grads, trainable_variables))
 
-        if iter_main % 100 == 0:
-            print("iteration: {}, training cost: {:0.3f}, test cost: {:0.3f}, training acc: {:0.3f}, test acc: {:0.3f}"
-                  .format(iter_main, train_cost, test_cost, train_acc, test_acc))
+            train_accuracy.update_state(minibatch_y, tf.transpose(logits))
 
-    plot(train_costs, test_costs, "cost")
-    plot(train_accuracy, test_accuracy, "accuracy")
+            epoch_cost += cost
+
+        epoch_cost /= m
+
+        costs.append(epoch_cost)
+        train_acc.append(train_accuracy.result())
+        for (minibatch_x, minibatch_y) in test_minibatches:
+
+            z3 = forward_propagation(tf.transpose(minibatch_x), parameters)
+
+            test_accuracy.update_state(minibatch_y, tf.transpose(z3))
+
+        test_acc.append(test_accuracy.result())
+
+
+        if epoch % 10 == 0:
+
+            print("epoch: {}, cost: {}, train accuracy: {}, test accuracy: {}".format(epoch, epoch_cost, train_accuracy.result(), test_accuracy.result()))
+
+    plot(train_acc, test_acc, "accuracy")
+    plot_cost(costs)
+
+    return parameters
 
 
 if __name__ == "__main__":
-
-    main()
-
+    params = main()
