@@ -176,6 +176,6 @@ class NeuralNetworks:
 
 if __name__ == "__main__":
 
-    neural_network = NeuralNetworks("train_catvnoncat.h5", "test_catvnoncat.h5", [32, 16], 0.01, 10000)
+    neural_network = NeuralNetworks("train_catvnoncat.h5", "test_catvnoncat.h5", [4, 3], 0.005, 20000)
 
     a, y, n, m, w, b, z, costs, accuracies, da, dz, dw, db = neural_network.solve()
