@@ -46,6 +46,35 @@ class OneHiddenLayer:
         y_test = np.array(dataset_test["test_set_y"])
         self._y["test"] = np.reshape(y_test, (1, len(y_test)))
 
+    def _load_planar_dataset(self):
+        np.random.seed(1)
+        m = 400  # number of examples
+        N = int(m / 2)  # number of points per class
+        D = 2  # dimensionality
+        X = np.zeros((m, D))  # data matrix where each row is a single example
+        Y = np.zeros((m, 1), dtype='uint8')  # labels vector (0 for red, 1 for blue)
+        a = 4  # maximum ray of the flower
+
+        for j in range(2):
+            ix = range(N * j, N * (j + 1))
+            t = np.linspace(j * 3.12, (j + 1) * 3.12, N) + np.random.randn(N) * 0.2  # theta
+            r = a * np.sin(4 * t) + np.random.randn(N) * 0.2  # radius
+            X[ix] = np.c_[r * np.sin(t), r * np.cos(t)]
+            Y[ix] = j
+
+        X = X.T  # (n, m)
+        Y = Y.T  # (1, m)
+
+        self._m["train"] = 350
+        self._m["test"] = 50
+        self._x["train"] = X[:, :self._m["train"]]
+        self._n[0] = self._x["train"].shape[0]
+        self._x["test"] = X[:, self._m["train"]:]
+        self._y["train"] = Y[:, :self._m["train"]]
+        self._n[2] = self._y["train"].shape[0]
+        self._y["test"] = Y[:, self._m["test"]:]
+
+
     @staticmethod
     def _sigmoid(i):
 
@@ -127,7 +156,7 @@ class OneHiddenLayer:
 
     def solve(self):
 
-        self._load_dataset()
+        self._load_planar_dataset()
 
         self._initialize_parameters()
 
